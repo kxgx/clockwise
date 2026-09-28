@@ -1,0 +1,86 @@
+name: ESP32 Firmware
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '*.md'
+      - '**/*.md'
+  pull_request:
+    paths-ignore:
+      - '*.md'
+      - '**/*.md'
+  workflow_dispatch:
+    inputs:
+      clockface:
+        description: 'Clockface id'
+        required: false
+        default: 'cw-cf-0x01'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.clockface }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        clockface: [cw-cf-0x01, cw-cf-0x07]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          path: clockwise
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.platformio/.cache
+            ~/.platformio/packages
+            ~/.platformio/platforms
+          key: ${{ runner.os }}-pio-${{ hashFiles('clockwise/firmware/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade platformio
+
+      - name: Link clockface
+        run: |
+          ln -sfn ../clockfaces/${{ matrix.clockface }} \
+            clockwise/firmware/lib/${{ matrix.clockface }}
+
+      - name: Build firmware
+        env:
+          FW_NAME: CW_${{ github.sha }}
+        run: pio run --project-dir clockwise/firmware/
+
+      - name: Check artifact exists
+        run: |
+          ls -lh clockwise/firmware/.pio/build/esp32dev/firmware.bin
+          sha256sum clockwise/firmware/.pio/build/esp32dev/firmware.bin | tee firmware.sha256
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v6
+        with:
+          name: firmware-${{ matrix.clockface }}
+          path: |
+            clockwise/firmware/.pio/build/esp32dev/firmware.bin
+            clockwise/firmware/.pio/build/esp32dev/firmware.elf
+            firmware.sha256
+          if-no-files-found: error
