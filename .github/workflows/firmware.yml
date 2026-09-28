@@ -29,10 +29,16 @@ jobs:
     name: Build ${{ matrix.clockface }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    continue-on-error: ${{ matrix.optional }}
     strategy:
       fail-fast: false
       matrix:
-        clockface: [cw-cf-0x01, cw-cf-0x07]
+        include:
+          - clockface: cw-cf-0x01
+            optional: false
+          # Canvas 时钟体积大，失败不挡门禁
+          - clockface: cw-cf-0x07
+            optional: true
     steps:
       - uses: actions/checkout@v5
         with:
@@ -68,7 +74,17 @@ jobs:
       - name: Build firmware
         env:
           FW_NAME: CW_${{ github.sha }}
-        run: pio run --project-dir clockwise/firmware/
+        run: |
+          set -o pipefail
+          pio run --project-dir clockwise/firmware/ 2>&1 | tee build.log
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: build-log-${{ matrix.clockface }}
+          path: build.log
+          if-no-files-found: ignore
 
       - name: Check artifact exists
         run: |
