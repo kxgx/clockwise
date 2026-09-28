@@ -31,7 +31,7 @@ static const char PUSH_PAGE[] PROGMEM = R"HTML(<!doctype html><html><head><meta 
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d',{willReadFrequently:true});
 const v=document.getElementById('v');
-let sending=false,last=0,raf=0,srcMode='';
+let sending=false,last=0,srcMode='';
 function draw(src,w,h){if(!w||!h)return;
  const s=Math.max(64/w,64/h),dw=w*s,dh=h*s;
  x.fillStyle='#000';x.fillRect(0,0,64,64);
@@ -45,27 +45,61 @@ function push(){if(sending)return;sending=true;
   .catch(()=>{document.getElementById('st').textContent='网络错误'})
   .finally(()=>{sending=false;});
 }
-function tick(t){raf=requestAnimationFrame(tick);
- if(!playing())return;
- if(t-last<66)return; last=t;
- if(v.videoWidth)draw(v,v.videoWidth,v.videoHeight);}
-function playing(){return !!(srcMode==='video'&&!v.paused&&!v.ended)}
-document.getElementById('img').onchange=e=>{const f=e.target.files[0];if(!f)return;
- stop();srcMode='image';const im=new Image();
- im.onload=()=>draw(im,im.width,im.height);im.src=URL.createObjectURL(f);};
-document.getElementById('vid').onchange=e=>{const f=e.target.files[0];if(!f)return;
- stop();srcMode='video';v.srcObject=null;v.src=URL.createObjectURL(f);v.loop=true;
- v.play().then(()=>{document.getElementById('st').textContent='视频播放中'});};
-document.getElementById('cam').onclick=async()=>{stop();
- try{const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:320},height:{ideal:320}}});
-  srcMode='video';v.src='';v.srcObject=s;v.muted=true;
-  await v.play();document.getElementById('st').textContent='摄像头';}catch(e){alert(e)}};
-document.getElementById('stop').onclick=()=>{stop();document.getElementById('st').textContent='已停止';};
-function stop(){cancelAnimationFrame(raf);
+// 帧循环常驻，不随 stop() 取消
+function tick(t){
+ requestAnimationFrame(tick);
+ if(srcMode!=='video'||v.paused||v.ended||!v.videoWidth)return;
+ if(t-last<66)return;
+ last=t;
+ draw(v,v.videoWidth,v.videoHeight);
+}
+requestAnimationFrame(tick);
+
+function stopMedia(){
  if(v.srcObject){for(const t of v.srcObject.getTracks())t.stop();v.srcObject=null;}
- if(v.src&&v.src.startsWith('blob:')){URL.revokeObjectURL(v.src);v.src='';}
- v.pause();srcMode='';}
-raf=requestAnimationFrame(tick);
+ if(v.src&&v.src.startsWith('blob:')){URL.revokeObjectURL(v.src);}
+ v.removeAttribute('src');v.load();
+}
+
+document.getElementById('img').onchange=e=>{
+ const f=e.target.files[0];if(!f)return;
+ stopMedia();srcMode='image';
+ const im=new Image();
+ im.onload=()=>{draw(im,im.width,im.height);document.getElementById('st').textContent='图片已发送';};
+ im.src=URL.createObjectURL(f);
+};
+
+document.getElementById('vid').onchange=async e=>{
+ const f=e.target.files[0];if(!f)return;
+ stopMedia();srcMode='video';
+ v.srcObject=null;
+ v.src=URL.createObjectURL(f);
+ v.loop=true;v.muted=true;
+ try{
+  await v.play();
+  document.getElementById('st').textContent='视频播放中';
+  // 立刻送一帧，避免等第一个 rAF
+  draw(v,v.videoWidth||64,v.videoHeight||64);
+ }catch(err){
+  document.getElementById('st').textContent='播放失败: '+err;
+ }
+};
+
+document.getElementById('cam').onclick=async()=>{
+ stopMedia();srcMode='video';
+ try{
+  const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:320},height:{ideal:320}}});
+  v.src='';v.srcObject=s;v.muted=true;
+  await v.play();
+  document.getElementById('st').textContent='摄像头';
+  draw(v,v.videoWidth||64,v.videoHeight||64);
+ }catch(err){document.getElementById('st').textContent='摄像头失败: '+err}
+};
+
+document.getElementById('stop').onclick=()=>{
+ stopMedia();srcMode='';
+ document.getElementById('st').textContent='已停止';
+};
 </script></body></html>)HTML";
 
 struct ClockwiseWebServer
