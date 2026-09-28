@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 
-// Clockface
-#include <Clockface.h>
+// Idle clockface: rpi-led-webpush style HH:MM + date + Chinese weekday
+#include <IdleClock.h>
 // Commons
 #include <WiFiController.h>
 #include <CWDateTime.h>
@@ -18,7 +18,7 @@
 
 MatrixPanel_I2S_DMA *dma_display = nullptr;
 
-Clockface *clockface;
+IdleClock *clockface;
 
 WiFiController wifi;
 CWDateTime cwDateTime;
@@ -125,7 +125,7 @@ void setup()
   uint8_t E_pin = ClockwiseParams::getInstance()->E_pin;
   
   displaySetup(ClockwiseParams::getInstance()->swapBlueGreen, ClockwiseParams::getInstance()->swapBlueRed, ClockwiseParams::getInstance()->displayBright, ClockwiseParams::getInstance()->displayRotation, driver, i2cSpeed, E_pin);
-  clockface = new Clockface(dma_display);
+  clockface = new IdleClock(dma_display);
   PushController::getInstance()->begin();
 
   autoBrightEnabled = (ClockwiseParams::getInstance()->autoBrightMax > 0);

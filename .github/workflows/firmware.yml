@@ -26,19 +26,9 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.clockface }}
+    name: Build idle-clock
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    continue-on-error: ${{ matrix.optional }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - clockface: cw-cf-0x01
-            optional: false
-          # Canvas 时钟体积大，失败不挡门禁
-          - clockface: cw-cf-0x07
-            optional: true
     steps:
       - uses: actions/checkout@v5
         with:
@@ -66,14 +56,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install --upgrade platformio
 
-      - name: Link clockface
-        run: |
-          ln -sfn ../clockfaces/${{ matrix.clockface }} \
-            clockwise/firmware/lib/${{ matrix.clockface }}
-
       - name: Build firmware
         env:
-          FW_NAME: CW_${{ github.sha }}
+          FW_NAME: CW_IDLECLOCK
         run: |
           set -o pipefail
           pio run --project-dir clockwise/firmware/ 2>&1 | tee build.log
@@ -82,7 +67,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: build-log-${{ matrix.clockface }}
+          name: build-log-idle-clock
           path: build.log
           if-no-files-found: ignore
 
@@ -94,7 +79,7 @@ jobs:
       - name: Upload firmware
         uses: actions/upload-artifact@v6
         with:
-          name: firmware-${{ matrix.clockface }}
+          name: firmware-idle-clock
           path: |
             clockwise/firmware/.pio/build/esp32dev/firmware.bin
             clockwise/firmware/.pio/build/esp32dev/firmware.elf
