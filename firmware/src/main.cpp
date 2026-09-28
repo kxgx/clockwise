@@ -9,6 +9,7 @@
 #include <CWPreferences.h>
 #include <CWWebServer.h>
 #include <StatusController.h>
+#include <PushController.h>
 
 #define MIN_BRIGHT_DISPLAY_ON 4
 #define MIN_BRIGHT_DISPLAY_OFF 0
@@ -125,6 +126,7 @@ void setup()
   
   displaySetup(ClockwiseParams::getInstance()->swapBlueGreen, ClockwiseParams::getInstance()->swapBlueRed, ClockwiseParams::getInstance()->displayBright, ClockwiseParams::getInstance()->displayRotation, driver, i2cSpeed, E_pin);
   clockface = new Clockface(dma_display);
+  PushController::getInstance()->begin();
 
   autoBrightEnabled = (ClockwiseParams::getInstance()->autoBrightMax > 0);
 
@@ -153,7 +155,13 @@ void loop()
     ezt::events();
   }
 
-  if (wifi.connectionSucessfulOnce)
+  // 浏览器推流优先；空闲超时后交还 clockface
+  PushController *push = PushController::getInstance();
+  if (push->active() && push->dirty)
+  {
+    push->draw(dma_display);
+  }
+  else if (wifi.connectionSucessfulOnce)
   {
     clockface->update();
   }

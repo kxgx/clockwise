@@ -25,6 +25,7 @@ const char SETTINGS_PAGE[] PROGMEM = R""""(
     <div id="fw-version" class="w3-bar-item w3-black w3-hover-red"></div>
     <div id="ssid" class="w3-bar-item w3-hover-blue w3-right"></div>
     <div class="w3-bar-item w3-button w3-hover-yellow w3-right" onclick="restartDevice();"><i class='fa fa-power-off'></i> Restart</div>
+    <a class="w3-bar-item w3-button w3-hover-yellow w3-right" href="/push"><i class='fa fa-upload'></i> Push</a>
     <div id="status" class="w3-bar-item w3-green" style="display:none"><i class='fa fa-floppy-o'></i> Saved! Restart your device</div>
   </div>
 
