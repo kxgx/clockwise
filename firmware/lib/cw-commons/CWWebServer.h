@@ -12,31 +12,60 @@
 
 WiFiServer server(80);
 
-// 极简推流页：浏览器解码缩放到 64x64 后 POST /push
+// 极简推流页：图片 / 视频文件 / 摄像头，浏览器解码缩放到 64x64 后 POST /push
 static const char PUSH_PAGE[] PROGMEM = R"HTML(<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Clockwise Push</title>
-<style>body{margin:0;background:#0b0d10;color:#c9d1d9;font:14px system-ui}canvas{image-rendering:pixelated;border:1px solid #333}a{color:#58a6ff}</style>
+<style>body{margin:0;background:#0b0d10;color:#c9d1d9;font:14px system-ui}canvas{image-rendering:pixelated;border:1px solid #333}a{color:#58a6ff}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}</style>
 </head><body>
 <h2>推送到 64x64</h2>
-<p><a href="/">设置</a></p>
+<p><a href="/">设置</a> · <a href="/geo">geo</a></p>
 <canvas id="c" width="64" height="64"></canvas>
-<p><input type="file" id="f" accept="image/*"><button id="cam">摄像头</button><span id="st"></span></p>
-<video id="v" muted playsinline style="display:none"></video>
+<div class="row">
+  <label>图片 <input type="file" id="img" accept="image/*"></label>
+  <label>视频 <input type="file" id="vid" accept="video/*"></label>
+  <button id="cam">摄像头</button>
+  <button id="stop">停止</button>
+  <span id="st"></span>
+</div>
+<video id="v" muted loop playsinline style="display:none"></video>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d',{willReadFrequently:true});
-const v=document.getElementById('v');let busy=false;
-async function push(){if(busy)return;busy=true;
- const d=x.getImageData(0,0,64,64).data;const b=new Uint8Array(64*64*3);
+const v=document.getElementById('v');
+let sending=false,last=0,raf=0,srcMode='';
+function draw(src,w,h){if(!w||!h)return;
+ const s=Math.max(64/w,64/h),dw=w*s,dh=h*s;
+ x.fillStyle='#000';x.fillRect(0,0,64,64);
+ x.drawImage(src,(64-dw)/2,(64-dh)/2,dw,dh);
+ push();}
+function push(){if(sending)return;sending=true;
+ const d=x.getImageData(0,0,64,64).data,b=new Uint8Array(64*64*3);
  for(let i=0,j=0;i<d.length;i+=4,j+=3){b[j]=d[i];b[j+1]=d[i+1];b[j+2]=d[i+2];}
- try{await fetch('/push',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:b});
- document.getElementById('st').textContent='已发送';}catch(e){document.getElementById('st').textContent='失败';}
- busy=false;}
-function draw(src,w,h){const s=Math.max(64/w,64/h);x.fillStyle='#000';x.fillRect(0,0,64,64);
- x.drawImage(src,(64-w*s)/2,(64-h*s)/2,w*s,h*s);push();}
-document.getElementById('f').onchange=e=>{const f=e.target.files[0];if(!f)return;
- const im=new Image();im.onload=()=>draw(im,im.width,im.height);im.src=URL.createObjectURL(f);};
-document.getElementById('cam').onclick=async()=>{const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:320},height:{ideal:320}}});
- v.srcObject=s;await v.play();v.requestVideoFrameCallback(function cb(){draw(v,v.videoWidth,v.videoHeight);v.requestVideoFrameCallback(cb);});};
+ fetch('/push',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:b})
+  .then(r=>{document.getElementById('st').textContent=r.ok?'已发送':'失败 '+r.status})
+  .catch(()=>{document.getElementById('st').textContent='网络错误'})
+  .finally(()=>{sending=false;});
+}
+function tick(t){raf=requestAnimationFrame(tick);
+ if(!playing())return;
+ if(t-last<66)return; last=t;
+ if(v.videoWidth)draw(v,v.videoWidth,v.videoHeight);}
+function playing(){return !!(srcMode==='video'&&!v.paused&&!v.ended)}
+document.getElementById('img').onchange=e=>{const f=e.target.files[0];if(!f)return;
+ stop();srcMode='image';const im=new Image();
+ im.onload=()=>draw(im,im.width,im.height);im.src=URL.createObjectURL(f);};
+document.getElementById('vid').onchange=e=>{const f=e.target.files[0];if(!f)return;
+ stop();srcMode='video';v.srcObject=null;v.src=URL.createObjectURL(f);v.loop=true;
+ v.play().then(()=>{document.getElementById('st').textContent='视频播放中'});};
+document.getElementById('cam').onclick=async()=>{stop();
+ try{const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:320},height:{ideal:320}}});
+  srcMode='video';v.src='';v.srcObject=s;v.muted=true;
+  await v.play();document.getElementById('st').textContent='摄像头';}catch(e){alert(e)}};
+document.getElementById('stop').onclick=()=>{stop();document.getElementById('st').textContent='已停止';};
+function stop(){cancelAnimationFrame(raf);
+ if(v.srcObject){for(const t of v.srcObject.getTracks())t.stop();v.srcObject=null;}
+ if(v.src&&v.src.startsWith('blob:')){URL.revokeObjectURL(v.src);v.src='';}
+ v.pause();srcMode='';}
+raf=requestAnimationFrame(tick);
 </script></body></html>)HTML";
 
 struct ClockwiseWebServer

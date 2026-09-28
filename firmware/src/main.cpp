@@ -155,11 +155,14 @@ void loop()
     ezt::events();
   }
 
-  // 浏览器推流优先；空闲超时后交还 clockface
+  // 浏览器推流优先：在 active 期间锁住 clockface，避免把推流帧盖掉
   PushController *push = PushController::getInstance();
-  if (push->active() && push->dirty)
+  if (push->active())
   {
-    push->draw(dma_display);
+    if (push->dirty)
+    {
+      push->draw(dma_display);
+    }
   }
   else if (wifi.connectionSucessfulOnce)
   {
