@@ -169,20 +169,19 @@ struct ClockwiseWebServer
       client.print(' ');
       client.println(PushController::H);
     } else if (method == "POST" && path == "/push") {
-      push->begin();
-      uint8_t *tmp = (uint8_t *)malloc(PushController::FRAME_LEN);
-      if (!tmp) {
+      // 不再 malloc 临时帧：body 直接写入 PushController 的 12KB 缓冲
+      uint8_t *dest = push->lockBuf();
+      if (!dest) {
         client.println("HTTP/1.0 500 Internal Server Error");
         return;
       }
-      size_t n = readBody(client, tmp, PushController::FRAME_LEN);
+      size_t n = readBody(client, dest, PushController::FRAME_LEN);
       if (n >= PushController::FRAME_LEN) {
-        push->accept(tmp, n);
+        push->finishFrame(n);
         client.println("HTTP/1.0 204 No Content");
       } else {
         client.println("HTTP/1.0 400 Bad Request");
       }
-      free(tmp);
     } else if (method == "GET" && path == "/get") {
       getCurrentSettings(client);
     } else if (method == "GET" && path == "/read") {

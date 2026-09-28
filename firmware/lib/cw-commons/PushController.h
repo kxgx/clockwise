@@ -29,12 +29,18 @@ struct PushController {
     return buf != nullptr && (millis() - lastFrameMs) < IDLE_MS;
   }
 
-  // 来自 HTTP 的一帧；data 必须是 FRAME_LEN 字节
-  void accept(const uint8_t *data, size_t n) {
-    if (!buf || n < FRAME_LEN) return;
-    memcpy(buf, data, FRAME_LEN);
-    dirty = true;
-    lastFrameMs = millis();
+  // 直接向内部缓冲写入（避免 HTTP 层再 malloc 一帧）
+  uint8_t *lockBuf() {
+    if (!buf) begin();
+    return buf;
+  }
+
+  // n==FRAME_LEN 才算有效帧
+  void finishFrame(size_t n) {
+    if (buf && n >= FRAME_LEN) {
+      dirty = true;
+      lastFrameMs = millis();
+    }
   }
 
   void draw(MatrixPanel_I2S_DMA *disp) {
